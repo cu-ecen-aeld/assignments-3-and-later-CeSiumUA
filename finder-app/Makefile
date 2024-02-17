@@ -1,6 +1,7 @@
-CC = gcc
+BASE_CC = gcc
 CFLAGS = -Wall -Wextra
 OUTPUT_FILE = writer
+CC=$(CROSS_COMPILE)$(BASE_CC)
 
 all: $(OUTPUT_FILE)
 
