@@ -9,14 +9,18 @@
 */
 bool do_system(const char *cmd)
 {
-
+    openlog("assignment3::do_system", 0, LOG_USER);
 /*
  * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    syslog(LOG_DEBUG | LOG_USER, "calling system with: %s\n", cmd);
+
     int wait_stat = system(cmd);
+
+    syslog(LOG_DEBUG | LOG_USER, "system call returned: %d\n", wait_stat);
 
     if (wait_stat == -1)
     {
@@ -26,10 +30,14 @@ bool do_system(const char *cmd)
     {
         if (WEXITSTATUS(wait_stat) == 0)
         {
+            syslog(LOG_DEBUG | LOG_USER, "system call (%s) succeeded\n", cmd);
+            closelog();
             return true;
         }
     }
 
+    syslog(LOG_DEBUG | LOG_USER, "system call (%s) failed: %d\n", cmd, wait_stat);
+    closelog();
     return false;
 }
 
@@ -52,16 +60,20 @@ bool do_exec(int count, ...)
     va_list args;
     va_start(args, count);
     char * command[count+1];
+    bool fn_result = false;
+    openlog("assignment3::do_exec", 0, LOG_USER);
+    
     int i;
     int res;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        syslog(LOG_DEBUG | LOG_USER, "command[%d]: %s\n", i, command[i]);
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count];
 
 /*
  * TODO:
@@ -72,35 +84,43 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
-    res = fork();
-    if (res == -1){
-        goto error_exit;
+    int pid;
+    syslog(LOG_DEBUG | LOG_USER, "calling fork\n");
+    pid = fork();
+    if (pid == -1){
+        syslog(LOG_ERR | LOG_USER, "fork error\n");
+        goto exit;
     }
-    else if(res == 0){
-        res = execv(command[0], command+1);
+    else if(pid == 0){
+        res = execv(command[0], command);
         if (res == -1){
-            goto error_exit;
+            syslog(LOG_ERR | LOG_USER, "execv error\n");
+            exit(1);
         }
+        syslog(LOG_ERR | LOG_USER, "after execv, which is unexpected\n");
     }
     else{
         int status;
-        res = wait(&status);
+        syslog(LOG_DEBUG | LOG_USER, "waiting for pid: %d\n", pid);
+        res = waitpid(pid, &status, 0);
         if (res == -1){
-            goto error_exit;
+            syslog(LOG_ERR | LOG_USER, "waitpid error\n");
+            goto exit;
         }
+        syslog(LOG_DEBUG | LOG_USER, "child process status: %d\n", status);
         if (WIFEXITED(status)){
             if (WEXITSTATUS(status) == 0){
-                va_end(args);
-                return true;
+                syslog(LOG_DEBUG | LOG_USER, "child process succeeded\n");
+                fn_result = true;
             }
         }
     }
 
-error_exit:
+exit:
+    syslog(LOG_DEBUG | LOG_USER, "exiting...\n");
     va_end(args);
-
-    return false;
+    closelog();
+    return fn_result;
 }
 
 /**
@@ -126,7 +146,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
 /*
  * TODO
- *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
+ *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a reference,
  *   redirect standard out to a file specified by outputfile.
  *   The rest of the behaviour is same as do_exec()
  *
