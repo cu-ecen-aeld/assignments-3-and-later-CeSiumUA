@@ -16,8 +16,21 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int wait_stat = system(cmd);
 
-    return true;
+    if (wait_stat == -1)
+    {
+        return false;
+    }
+    else if (WIFEXITED(wait_stat))
+    {
+        if (WEXITSTATUS(wait_stat) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -40,6 +53,7 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    int res;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
@@ -59,9 +73,34 @@ bool do_exec(int count, ...)
  *
 */
 
+    res = fork();
+    if (res == -1){
+        goto error_exit;
+    }
+    else if(res == 0){
+        res = execv(command[0], command+1);
+        if (res == -1){
+            goto error_exit;
+        }
+    }
+    else{
+        int status;
+        res = wait(&status);
+        if (res == -1){
+            goto error_exit;
+        }
+        if (WIFEXITED(status)){
+            if (WEXITSTATUS(status) == 0){
+                va_end(args);
+                return true;
+            }
+        }
+    }
+
+error_exit:
     va_end(args);
 
-    return true;
+    return false;
 }
 
 /**
