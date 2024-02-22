@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <syslog.h>
+#include <fcntl.h>
+#include <errno.h>
 
 bool do_system(const char *command);
 

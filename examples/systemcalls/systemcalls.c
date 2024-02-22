@@ -133,15 +133,19 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_list args;
     va_start(args, count);
     char * command[count+1];
+    openlog("assignment3::do_exec_redirect", 0, LOG_USER);
+    int fn_result = false;
+    int res;
     int i;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        syslog(LOG_DEBUG | LOG_USER, "command[%d]: %s\n", i, command[i]);
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    // command[count] = command[count];
 
 
 /*
@@ -152,7 +156,49 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-    va_end(args);
+    int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1){
+        syslog(LOG_ERR | LOG_USER, "error opening %s\n", outputfile);
+        goto exit;
+    }
 
-    return true;
+    int pid = fork();
+    if (pid == -1){
+        syslog(LOG_ERR | LOG_USER, "fork error\n");
+        goto exit;
+    }
+    else if(pid == 0){
+        syslog(LOG_DEBUG | LOG_USER, "redirecting stdout to %s\n", outputfile);
+        res = dup2(fd, STDOUT_FILENO);
+        if (res == -1){
+            syslog(LOG_ERR | LOG_USER, "dup2 error\n");
+            exit(1);
+        }
+        res = execv(command[0], command);
+        if (res == -1){
+            syslog(LOG_ERR | LOG_USER, "execv error\n");
+            exit(1);
+        }
+        syslog(LOG_ERR | LOG_USER, "after execv, which is unexpected\n");
+    }
+    else{
+        int status;
+        syslog(LOG_DEBUG | LOG_USER, "waiting for pid: %d\n", pid);
+        res = waitpid(pid, &status, 0);
+        if (res == -1){
+            syslog(LOG_ERR | LOG_USER, "waitpid error\n");
+            goto exit;
+        }
+        syslog(LOG_DEBUG | LOG_USER, "child process status: %d\n", status);
+        if (WIFEXITED(status)){
+            if (WEXITSTATUS(status) == 0){
+                syslog(LOG_DEBUG | LOG_USER, "child process succeeded\n");
+                fn_result = true;
+            }
+        }
+    }
+
+exit:
+    va_end(args);
+    return fn_result;
 }
