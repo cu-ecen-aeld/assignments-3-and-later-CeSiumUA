@@ -5,6 +5,9 @@
 set -e
 set -u
 
+# For debugging
+set -x
+
 OUTDIR=/tmp/aeld
 KERNEL_REPO=git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
 KERNEL_VERSION=v5.1.10
@@ -35,6 +38,16 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     git checkout ${KERNEL_VERSION}
 
     # TODO: Add your kernel build steps here
+    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- mrproper
+    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- defconfig
+
+    # Install a patch (Actual for Ubuntu 22.04)
+    curl https://github.com/torvalds/linux/commit/e33a814e772cdc36436c8c188d8c42d019fda639.patch -o yylloc.patch
+    git apply yylloc.patch
+
+    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- all -j4
+    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules
+    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- dtbs
 fi
 
 echo "Adding the Image in outdir"
