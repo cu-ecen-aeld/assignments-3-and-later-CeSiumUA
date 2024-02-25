@@ -38,16 +38,16 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     git checkout ${KERNEL_VERSION}
 
     # TODO: Add your kernel build steps here
-    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- mrproper
-    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- defconfig
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
 
     # Install a patch (Actual for Ubuntu 22.04)
     curl https://github.com/torvalds/linux/commit/e33a814e772cdc36436c8c188d8c42d019fda639.patch -o yylloc.patch
     git apply yylloc.patch
 
-    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- all -j4
-    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules
-    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- dtbs
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all -j4
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
 fi
 
 echo "Adding the Image in outdir"
@@ -61,19 +61,29 @@ then
 fi
 
 # TODO: Create necessary base directories
+mkdir -p ${OUTDIR}/rootfs
+
+cd ${OUTDIR}/rootfs
+mkdir -pv bin dev etc home lib lib64 proc sbin sys tmp usr var
+mkdir -pv usr/bin usr/lib usr/sbin
+mkdir -pv var/log
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
 then
-git clone git://busybox.net/busybox.git
+    git clone git://busybox.net/busybox.git
     cd busybox
     git checkout ${BUSYBOX_VERSION}
     # TODO:  Configure busybox
+    make distclean
+    make defconfig
 else
     cd busybox
 fi
 
 # TODO: Make and install busybox
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} CONFIG_PREFIX=${OUTDIR}/rootfs install
 
 echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
