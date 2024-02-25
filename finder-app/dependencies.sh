@@ -2,8 +2,8 @@
 # Dependency installation script for kernel build.
 # Author: Siddhant Jajoo.
 
-
-sudo apt-get install -y libssl-dev
-sudo apt-get install -y u-boot-tools
-sudo apt-get install -y qemu
-sudo apt-get install -y curl
+sudo apt update
+sudo apt install -y libssl-dev
+sudo apt install -y u-boot-tools
+sudo apt install -y qemu
+sudo apt install -y curl
