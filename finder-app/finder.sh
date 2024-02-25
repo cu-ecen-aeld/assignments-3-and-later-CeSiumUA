@@ -1,3 +1,7 @@
+#!/bin/sh
+# Tester script for assignment 1 and assignment 2
+# Author: Siddhant Jajoo
+
 if [ $# -lt 2 ]; then
     echo "Not enough arguments supplied"
     exit 1
