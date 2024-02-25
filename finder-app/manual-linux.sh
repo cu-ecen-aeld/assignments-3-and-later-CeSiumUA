@@ -90,6 +90,15 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+cd ${OUTDIR}/rootfs
+CROSS_COMPILER_SYSROOT=$(aarch64-none-linux-gnu-gcc -print-sysroot)
+
+echo "Copying shared libraries from ${CROSS_COMPILER_SYSROOT} to rootfs"
+
+cp -L ${CROSS_COMPILER_SYSROOT}/lib/ld-linux-aarch64.so.1 lib/
+cp -L ${CROSS_COMPILER_SYSROOT}/lib64/libm.so.6 lib64/
+cp -L ${CROSS_COMPILER_SYSROOT}/lib64/libc.so.6 lib64/
+cp -L ${CROSS_COMPILER_SYSROOT}/lib64/libresolv.so.2 lib64/
 
 # TODO: Make device nodes
 
