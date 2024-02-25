@@ -113,8 +113,13 @@ cp writer ${OUTDIR}/rootfs/home
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 cp finder.sh finder-test.sh autorun-qemu.sh ${OUTDIR}/rootfs/home
-cp -r conf ${OUTDIR}/rootfs/home
+mkdir -p ${OUTDIR}/rootfs/home/conf
+cp conf/assignment.txt conf/username.txt ${OUTDIR}/rootfs/home/conf
 
 # TODO: Chown the root directory
+cd ${OUTDIR}/rootfs
+sudo chown -R root:root *
 
 # TODO: Create initramfs.cpio.gz
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
+gzip -f ${OUTDIR}/initramfs.cpio
