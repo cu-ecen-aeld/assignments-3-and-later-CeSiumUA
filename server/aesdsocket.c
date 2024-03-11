@@ -74,7 +74,6 @@ int main(int argc, char **argv){
     while(is_active){
         int client_fd;
         struct sockaddr_storage client_addr;
-        socklen_t sin_size;
 
         client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &(socklen_t){sizeof(client_addr)});
         if (client_fd == -1){
@@ -94,7 +93,7 @@ int main(int argc, char **argv){
             continue;
         }
 
-        while(res = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0) > 0){
+        while((res = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
             syslog(LOG_DEBUG, "Received %d bytes: %s", res, recv_buffer);
 
             fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
@@ -118,9 +117,9 @@ int main(int argc, char **argv){
             goto close_client_file;
         }
 
-        while(fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file) > 0){
+        while((res = fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file)) > 0){
             syslog(LOG_DEBUG, "Sending %d bytes: %s", res, recv_buffer);
-            res = send(client_fd, recv_buffer, sizeof(recv_buffer), 0);
+            res = send(client_fd, recv_buffer, res, 0);
             if(res == -1){
                 syslog(LOG_ERR, "send error: %s", strerror(errno));
                 goto close_client_file;

@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <unistd.h>
 
 #define DAEMON_KEY          "-d"
 #define PORT                "9000"
