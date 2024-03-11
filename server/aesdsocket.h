@@ -15,5 +15,7 @@
 
 #define DAEMON_KEY          "-d"
 #define PORT                "9000"
+#define DATA_FILE_NAME      "/var/tmp/aesdsocketdata"
+#define RECV_BUFFER_LEN     512
 
 #endif

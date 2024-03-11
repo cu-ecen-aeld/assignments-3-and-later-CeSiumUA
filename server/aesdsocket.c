@@ -1,10 +1,18 @@
 #include "aesdsocket.h"
 
+bool is_active = true;
+
+static void remove_data_file(void);
+static void *get_in_addr(struct sockaddr *sa);
+
 int main(int argc, char **argv){
 
     struct addrinfo hints, *addr_res;
     int sockfd;
     int res;
+    int return_val = 0;
+    char addr_str[INET6_ADDRSTRLEN];
+    char recv_buffer[RECV_BUFFER_LEN] = {0};
 
     bool start_in_daemon = false;
 
@@ -29,12 +37,126 @@ int main(int argc, char **argv){
     sockfd = socket(addr_res->ai_family, addr_res->ai_socktype, addr_res->ai_protocol);
     if(sockfd == -1){
         syslog(LOG_ERR, "socket error: %s", strerror(errno));
-        return -1;
+        return_val = -1;
+        goto exit;
+    }
+
+    res = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+    if(res == -1){
+        syslog(LOG_ERR, "setsockopt error: %s", strerror(errno));
+        return_val = -1;
+        goto exit;
     }
 
     res = bind(sockfd, addr_res->ai_addr, addr_res->ai_addrlen);
     if(res == -1){
         syslog(LOG_ERR, "bind error: %s", strerror(errno));
-        return -1;
+        return_val = -1;
+        goto exit;
     }
+
+    if (start_in_daemon){
+        res = daemon(0, 0);
+        if(res == -1){
+            syslog(LOG_ERR, "daemon creation error: %s", strerror(errno));
+            return_val = -1;
+            goto exit;
+        }
+    }
+
+    res = listen(sockfd, 20);
+    if(res == -1){
+        syslog(LOG_ERR, "listen error: %s", strerror(errno));
+        return_val = -1;
+        goto exit;
+    }
+
+    while(is_active){
+        int client_fd;
+        struct sockaddr_storage client_addr;
+        socklen_t sin_size;
+
+        client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &(socklen_t){sizeof(client_addr)});
+        if (client_fd == -1){
+            syslog(LOG_ERR, "accept error: %s", strerror(errno));
+            continue;
+        }
+
+        inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), addr_str, sizeof(addr_str));
+
+        syslog(LOG_INFO, "Accepted connection from %s", addr_str);
+
+        FILE *data_file = fopen(DATA_FILE_NAME, "a+");
+
+        if(data_file == NULL){
+            syslog(LOG_ERR, "Error opening data file: %s", strerror(errno));
+            goto close_client;
+            continue;
+        }
+
+        while(res = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0) > 0){
+            syslog(LOG_DEBUG, "Received %d bytes: %s", res, recv_buffer);
+
+            fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
+
+            if(memchr(recv_buffer, '\n', res) != NULL){
+                syslog(LOG_DEBUG, "Newline detected. Packet fully received");
+                break;
+            }
+
+            memset(recv_buffer, 0, sizeof(recv_buffer));
+        }
+
+        if(res == 0){
+            syslog(LOG_INFO, "Connection closed by client");
+        } else if(res == -1){
+            syslog(LOG_ERR, "recv error: %s", strerror(errno));
+        }
+
+        if(fseek(data_file, 0, SEEK_SET) == -1){
+            syslog(LOG_ERR, "Error seeking data file: %s", strerror(errno));
+            goto close_client_file;
+        }
+
+        while(fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file) > 0){
+            syslog(LOG_DEBUG, "Sending %d bytes: %s", res, recv_buffer);
+            res = send(client_fd, recv_buffer, sizeof(recv_buffer), 0);
+            if(res == -1){
+                syslog(LOG_ERR, "send error: %s", strerror(errno));
+                goto close_client_file;
+            }
+            memset(recv_buffer, 0, sizeof(recv_buffer));
+        }
+
+        
+
+    close_client_file:
+        fclose(data_file);
+    close_client:
+        close(client_fd);
+
+        syslog(LOG_INFO, "Closed connection from %s", addr_str);
+    }
+
+exit:
+    freeaddrinfo(addr_res);
+    close(sockfd);
+    remove_data_file();
+    closelog();
+    return return_val;
+}
+
+static void remove_data_file(void){
+    if(remove(DATA_FILE_NAME) == 0){
+        syslog(LOG_INFO, "Removed data file");
+    } else {
+        syslog(LOG_ERR, "Error removing data file: %s", strerror(errno));
+    }
+}
+
+static void *get_in_addr(struct sockaddr *sa){
+    if(sa->sa_family == AF_INET){
+        return &(((struct sockaddr_in *)sa)->sin_addr);
+    }
+    return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
