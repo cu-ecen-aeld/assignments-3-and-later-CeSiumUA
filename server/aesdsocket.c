@@ -128,7 +128,7 @@ int main(int argc, char **argv){
         }
 
         while((res = fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file)) > 0){
-            syslog(LOG_DEBUG, "Sending %d bytes: %s", res, recv_buffer);
+            syslog(LOG_DEBUG, "Sending %d bytes", res);
             res = send(client_fd, recv_buffer, res, 0);
             if(res == -1){
                 syslog(LOG_ERR, "send error: %s", strerror(errno));
