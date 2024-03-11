@@ -102,7 +102,7 @@ int main(int argc, char **argv){
         }
 
         while((res = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
-            syslog(LOG_DEBUG, "Received %d bytes: %s", res, recv_buffer);
+            syslog(LOG_DEBUG, "Received %d bytes", res);
 
             fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
 
