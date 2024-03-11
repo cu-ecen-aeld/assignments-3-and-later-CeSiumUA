@@ -1,14 +1,17 @@
 #include "aesdsocket.h"
 
 bool is_active = true;
+int sockfd = -1;
+int client_fd = -1;
 
 static void remove_data_file(void);
 static void *get_in_addr(struct sockaddr *sa);
+static void signal_handler(int sig);
 
 int main(int argc, char **argv){
 
     struct addrinfo hints, *addr_res;
-    int sockfd;
+    struct sigaction sa = {0};
     int res;
     int return_val = 0;
     char addr_str[INET6_ADDRSTRLEN];
@@ -22,6 +25,12 @@ int main(int argc, char **argv){
         syslog(LOG_DEBUG, "daemon flag provided, server will start in daemon mode");
         start_in_daemon = true;
     }
+
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -72,7 +81,6 @@ int main(int argc, char **argv){
     }
 
     while(is_active){
-        int client_fd;
         struct sockaddr_storage client_addr;
 
         client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &(socklen_t){sizeof(client_addr)});
@@ -108,8 +116,10 @@ int main(int argc, char **argv){
 
         if(res == 0){
             syslog(LOG_INFO, "Connection closed by client");
+            goto close_client_file;
         } else if(res == -1){
             syslog(LOG_ERR, "recv error: %s", strerror(errno));
+            goto close_client_file;
         }
 
         if(fseek(data_file, 0, SEEK_SET) == -1){
@@ -127,12 +137,11 @@ int main(int argc, char **argv){
             memset(recv_buffer, 0, sizeof(recv_buffer));
         }
 
-        
-
     close_client_file:
         fclose(data_file);
     close_client:
         close(client_fd);
+        client_fd = -1;
 
         syslog(LOG_INFO, "Closed connection from %s", addr_str);
     }
@@ -140,6 +149,7 @@ int main(int argc, char **argv){
 exit:
     freeaddrinfo(addr_res);
     close(sockfd);
+    sockfd = -1;
     remove_data_file();
     closelog();
     return return_val;
@@ -158,4 +168,17 @@ static void *get_in_addr(struct sockaddr *sa){
         return &(((struct sockaddr_in *)sa)->sin_addr);
     }
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
+}
+
+static void signal_handler(int sig){
+    if(sig == SIGINT || sig == SIGTERM){
+        syslog(LOG_INFO, "Received SIGINT/SIGTERM (%d). Shutting down...", sig);
+        is_active = false;
+        if(sockfd != -1){
+            shutdown(sockfd, SHUT_RDWR);
+        }
+        if(client_fd != -1){
+            shutdown(client_fd, SHUT_RDWR);
+        }
+    }
 }
