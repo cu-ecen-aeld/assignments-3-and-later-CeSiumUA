@@ -23,6 +23,11 @@ typedef struct client_thread_data{
     char addr_str[INET6_ADDRSTRLEN];
 } client_thread_data_t;
 
+typedef struct thread_instance{
+    pthread_t thread;
+    client_thread_data_t *thread_data;
+} thread_instance_t;
+
 #define DAEMON_KEY          "-d"
 #define PORT                "9000"
 #define DATA_FILE_NAME      "/var/tmp/aesdsocketdata"

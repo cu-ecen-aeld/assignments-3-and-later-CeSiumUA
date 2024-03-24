@@ -8,7 +8,7 @@ static void remove_data_file(void);
 static void *get_in_addr(struct sockaddr *sa);
 static void signal_handler(int sig);
 
-void connection_handler(void *current_thread_data){
+void* connection_handler(void *current_thread_data){
     int res;
     char recv_buffer[RECV_BUFFER_LEN] = {0};
     client_thread_data_t *thread_data = NULL;
@@ -159,6 +159,7 @@ int main(int argc, char **argv){
     while(is_active){
         struct sockaddr_storage client_addr;
         client_thread_data_t *thread_data = NULL;
+        thread_instance_t *thread_instance = NULL;
 
         client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &(socklen_t){sizeof(client_addr)});
         if (client_fd == -1){
@@ -170,7 +171,7 @@ int main(int argc, char **argv){
 
         if(thread_data == NULL){
             syslog(LOG_ERR, "Error allocating memory for thread data: %s", strerror(errno));
-            close(client_fd);
+            goto listener_close_client;
             continue;
         }
 
@@ -181,6 +182,32 @@ int main(int argc, char **argv){
         syslog(LOG_INFO, "Accepted connection from %s", thread_data->addr_str);
 
         syslog(LOG_INFO, "Spawning new thread to handle connection from %s", thread_data->addr_str);
+
+        thread_instance = (thread_instance_t *) malloc(sizeof(*thread_instance));
+
+        if(thread_instance == NULL){
+            syslog(LOG_ERR, "Error allocating memory for thread instance: %s", strerror(errno));
+            goto listener_free_thread_data;
+            continue;
+        }
+
+        res = pthread_create(&(thread_instance->thread), NULL, connection_handler, (void *)thread_data);
+        if(res != 0){
+            syslog(LOG_ERR, "pthread_create error: %d", res);
+            goto listener_free_thread_instance;
+        }
+
+        //TODO: Add thread_instance to a queue for tracking
+
+        continue;
+
+    
+    listener_free_thread_instance:
+        free(thread_instance);
+    listener_free_thread_data:
+        free(thread_data);
+    listener_close_client:
+        close(client_fd);
     }
 
 exit:
