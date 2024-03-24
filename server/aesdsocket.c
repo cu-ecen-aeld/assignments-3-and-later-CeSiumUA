@@ -2,20 +2,89 @@
 
 bool is_active = true;
 int sockfd = -1;
-int client_fd = -1;
+pthread_mutex_t file_mutex;
 
 static void remove_data_file(void);
 static void *get_in_addr(struct sockaddr *sa);
 static void signal_handler(int sig);
 
-int main(int argc, char **argv){
+void connection_handler(void *current_thread_data){
+    int res;
+    char recv_buffer[RECV_BUFFER_LEN] = {0};
+    client_thread_data_t *thread_data = NULL;
 
+    thread_data = (client_thread_data_t *) current_thread_data;
+
+    if(thread_data == NULL){
+        syslog(LOG_ERR, "Thread data is NULL");
+        return;
+    }
+
+    res = pthread_mutex_lock(&file_mutex);
+    if(res != 0){
+        syslog(LOG_ERR, "pthread_mutex_lock error: %d", res);
+        goto close_client;
+    }
+
+    FILE *data_file = fopen(DATA_FILE_NAME, "a+");
+
+    if(data_file == NULL){
+        syslog(LOG_ERR, "Error opening data file: %s", strerror(errno));
+        goto close_client;
+    }
+
+    while((res = recv(thread_data->client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
+        syslog(LOG_DEBUG, "Received %d bytes", res);
+
+        fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
+
+        if(memchr(recv_buffer, '\n', res) != NULL){
+            syslog(LOG_DEBUG, "Newline detected. Packet fully received");
+            break;
+        }
+
+        memset(recv_buffer, 0, sizeof(recv_buffer));
+    }
+
+    if(res == 0){
+        syslog(LOG_INFO, "Connection closed by client");
+        goto close_client_file;
+    } else if(res == -1){
+        syslog(LOG_ERR, "recv error: %s", strerror(errno));
+        goto close_client_file;
+    }
+
+    if(fseek(data_file, 0, SEEK_SET) == -1){
+        syslog(LOG_ERR, "Error seeking data file: %s", strerror(errno));
+        goto close_client_file;
+    }
+
+    while((res = fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file)) > 0){
+        syslog(LOG_DEBUG, "Sending %d bytes", res);
+        res = send(thread_data->client_fd, recv_buffer, res, 0);
+        if(res == -1){
+            syslog(LOG_ERR, "send error: %s", strerror(errno));
+            goto close_client_file;
+        }
+        memset(recv_buffer, 0, sizeof(recv_buffer));
+    }
+
+close_client_file:
+    fclose(data_file);
+close_client:
+    pthread_mutex_unlock(&file_mutex);
+    close(thread_data->client_fd);
+    thread_data->client_fd = -1;
+
+    syslog(LOG_INFO, "Closed connection from %s", thread_data->addr_str);
+}
+
+int main(int argc, char **argv){
     struct addrinfo hints, *addr_res;
     struct sigaction sa = {0};
+    int client_fd = -1;
     int res;
     int return_val = 0;
-    char addr_str[INET6_ADDRSTRLEN];
-    char recv_buffer[RECV_BUFFER_LEN] = {0};
 
     bool start_in_daemon = false;
 
@@ -80,8 +149,16 @@ int main(int argc, char **argv){
         goto exit;
     }
 
+    res = pthread_mutex_init(&file_mutex, NULL);
+    if(res != 0){
+        syslog(LOG_ERR, "pthread_mutex_init error: %d", res);
+        return_val = -1;
+        goto exit;
+    }
+
     while(is_active){
         struct sockaddr_storage client_addr;
+        client_thread_data_t *thread_data = NULL;
 
         client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &(socklen_t){sizeof(client_addr)});
         if (client_fd == -1){
@@ -89,64 +166,25 @@ int main(int argc, char **argv){
             continue;
         }
 
-        inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), addr_str, sizeof(addr_str));
+        thread_data = (client_thread_data_t *) malloc(sizeof(*thread_data));
 
-        syslog(LOG_INFO, "Accepted connection from %s", addr_str);
-
-        FILE *data_file = fopen(DATA_FILE_NAME, "a+");
-
-        if(data_file == NULL){
-            syslog(LOG_ERR, "Error opening data file: %s", strerror(errno));
-            goto close_client;
+        if(thread_data == NULL){
+            syslog(LOG_ERR, "Error allocating memory for thread data: %s", strerror(errno));
+            close(client_fd);
             continue;
         }
 
-        while((res = recv(client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
-            syslog(LOG_DEBUG, "Received %d bytes", res);
+        thread_data->client_fd = client_fd;
 
-            fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
+        inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), thread_data->addr_str, sizeof(thread_data->addr_str));
 
-            if(memchr(recv_buffer, '\n', res) != NULL){
-                syslog(LOG_DEBUG, "Newline detected. Packet fully received");
-                break;
-            }
+        syslog(LOG_INFO, "Accepted connection from %s", thread_data->addr_str);
 
-            memset(recv_buffer, 0, sizeof(recv_buffer));
-        }
-
-        if(res == 0){
-            syslog(LOG_INFO, "Connection closed by client");
-            goto close_client_file;
-        } else if(res == -1){
-            syslog(LOG_ERR, "recv error: %s", strerror(errno));
-            goto close_client_file;
-        }
-
-        if(fseek(data_file, 0, SEEK_SET) == -1){
-            syslog(LOG_ERR, "Error seeking data file: %s", strerror(errno));
-            goto close_client_file;
-        }
-
-        while((res = fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file)) > 0){
-            syslog(LOG_DEBUG, "Sending %d bytes", res);
-            res = send(client_fd, recv_buffer, res, 0);
-            if(res == -1){
-                syslog(LOG_ERR, "send error: %s", strerror(errno));
-                goto close_client_file;
-            }
-            memset(recv_buffer, 0, sizeof(recv_buffer));
-        }
-
-    close_client_file:
-        fclose(data_file);
-    close_client:
-        close(client_fd);
-        client_fd = -1;
-
-        syslog(LOG_INFO, "Closed connection from %s", addr_str);
+        syslog(LOG_INFO, "Spawning new thread to handle connection from %s", thread_data->addr_str);
     }
 
 exit:
+    pthread_mutex_destroy(&file_mutex);
     freeaddrinfo(addr_res);
     close(sockfd);
     sockfd = -1;

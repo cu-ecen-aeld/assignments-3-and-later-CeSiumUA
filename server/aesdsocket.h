@@ -16,6 +16,12 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <thread_queue.h>
+
+typedef struct client_thread_data{
+    int client_fd;
+    char addr_str[INET6_ADDRSTRLEN];
+} client_thread_data_t;
 
 #define DAEMON_KEY          "-d"
 #define PORT                "9000"
