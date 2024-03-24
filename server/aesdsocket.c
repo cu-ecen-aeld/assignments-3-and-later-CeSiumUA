@@ -2,7 +2,7 @@
 
 bool is_active = true;
 int sockfd = -1;
-pthread_mutex_t file_mutex;
+struct slist_head list_head;
 
 static void remove_data_file(void);
 static void *get_in_addr(struct sockaddr *sa);
@@ -17,10 +17,10 @@ void* connection_handler(void *current_thread_data){
 
     if(thread_data == NULL){
         syslog(LOG_ERR, "Thread data is NULL");
-        return;
+        return current_thread_data;
     }
 
-    res = pthread_mutex_lock(&file_mutex);
+    res = pthread_mutex_lock(thread_data->mutex);
     if(res != 0){
         syslog(LOG_ERR, "pthread_mutex_lock error: %d", res);
         goto close_client;
@@ -72,15 +72,20 @@ void* connection_handler(void *current_thread_data){
 close_client_file:
     fclose(data_file);
 close_client:
-    pthread_mutex_unlock(&file_mutex);
+    pthread_mutex_unlock(thread_data->mutex);
     close(thread_data->client_fd);
     thread_data->client_fd = -1;
 
     syslog(LOG_INFO, "Closed connection from %s", thread_data->addr_str);
+
+    thread_data->thread_completed = true;
+
+    return current_thread_data;
 }
 
 int main(int argc, char **argv){
     struct addrinfo hints, *addr_res;
+    pthread_mutex_t file_mutex;
     struct sigaction sa = {0};
     int client_fd = -1;
     int res;
@@ -156,6 +161,8 @@ int main(int argc, char **argv){
         goto exit;
     }
 
+    SLIST_INIT(&list_head);
+
     while(is_active){
         struct sockaddr_storage client_addr;
         client_thread_data_t *thread_data = NULL;
@@ -176,6 +183,8 @@ int main(int argc, char **argv){
         }
 
         thread_data->client_fd = client_fd;
+        thread_data->mutex = &file_mutex;
+        thread_data->thread_completed = false;
 
         inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), thread_data->addr_str, sizeof(thread_data->addr_str));
 
@@ -197,17 +206,59 @@ int main(int argc, char **argv){
             goto listener_free_thread_instance;
         }
 
-        //TODO: Add thread_instance to a queue for tracking
+        res = queue_enqueue(thread_instance);
+        if(!res){
+            syslog(LOG_ERR, "Error adding thread instance to queue");
+            goto listener_kill_thread;
+        }
+
+        node_t *node = queue_get_head();
+        do{
+            thread_instance_t *thread_instance = (thread_instance_t *)node->data;
+            if(thread_instance == NULL){
+                syslog(LOG_ERR, "Thread instance is NULL");
+                continue;
+            }
+            if(thread_instance->thread_data == NULL){
+                syslog(LOG_ERR, "Thread data is NULL");
+                continue;
+            }
+            if(thread_instance->thread_data->thread_completed){
+                if(thread_instance->thread_data->client_fd != -1){
+                    close(thread_instance->thread_data->client_fd);
+                }
+                free(thread_instance->thread_data);
+                pthread_join(thread_instance->thread, NULL);
+                queue_remove(thread_instance);
+                free(thread_instance);
+            }
+        }while((node = node->next) != NULL);
 
         continue;
 
-    
+    listener_kill_thread:
+        pthread_cancel(thread_instance->thread);
     listener_free_thread_instance:
         free(thread_instance);
     listener_free_thread_data:
         free(thread_data);
     listener_close_client:
         close(client_fd);
+    }
+
+    thread_instance_t *thread_instance;
+    while ((thread_instance = (thread_instance_t *) queue_dequeue()) != NULL)
+    {
+        if(thread_instance != NULL){
+            if(thread_instance->thread_data != NULL){
+                if(thread_instance->thread_data->client_fd != -1){
+                    close(thread_instance->thread_data->client_fd);
+                }
+                free(thread_instance->thread_data);
+            }
+            pthread_join(thread_instance->thread, NULL);
+            free(thread_instance);
+        }
     }
 
 exit:
@@ -237,13 +288,13 @@ static void *get_in_addr(struct sockaddr *sa){
 
 static void signal_handler(int sig){
     if(sig == SIGINT || sig == SIGTERM){
+        int old_errno = errno;
         syslog(LOG_INFO, "Received SIGINT/SIGTERM (%d). Shutting down...", sig);
         is_active = false;
         if(sockfd != -1){
             shutdown(sockfd, SHUT_RDWR);
         }
-        if(client_fd != -1){
-            shutdown(client_fd, SHUT_RDWR);
-        }
+
+        errno = old_errno;
     }
 }

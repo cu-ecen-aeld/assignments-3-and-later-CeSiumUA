@@ -17,10 +17,13 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <thread_queue.h>
+#include <pthread.h>
 
 typedef struct client_thread_data{
     int client_fd;
     char addr_str[INET6_ADDRSTRLEN];
+    pthread_mutex_t *mutex;
+    bool thread_completed;
 } client_thread_data_t;
 
 typedef struct thread_instance{
