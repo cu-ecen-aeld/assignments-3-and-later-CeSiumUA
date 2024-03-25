@@ -250,34 +250,45 @@ int main(int argc, char **argv){
 
         syslog(LOG_DEBUG, "Thread instance added to queue");
 
-        // node_t *node = queue_get_head();
-        // do{
-        //     syslog(LOG_DEBUG, "Checking thread");
-        //     if(node == NULL){
-        //         syslog(LOG_ERR, "Node is NULL");
-        //         break;
-        //     }
-        //     thread_instance_t *thread_instance = (thread_instance_t *)node->data;
-        //     if(thread_instance == NULL){
-        //         syslog(LOG_ERR, "Thread instance is NULL");
-        //         continue;
-        //     }
-        //     if(thread_instance->thread_data == NULL){
-        //         syslog(LOG_ERR, "Thread data is NULL");
-        //         continue;
-        //     }
-        //     if(thread_instance->thread_data->thread_completed){
-        //         syslog(LOG_DEBUG, "Thread completed. Joining and freeing resources");
-        //         if(thread_instance->thread_data->client_fd != -1){
-        //             close(thread_instance->thread_data->client_fd);
-        //         }
-        //         free(thread_instance->thread_data);
-        //         pthread_join(thread_instance->thread, NULL);
-        //         queue_remove(thread_instance);
-        //         free(thread_instance);
-        //         syslog(LOG_DEBUG, "Thread resources freed");
-        //     }
-        // }while((node = node->next) != NULL);
+        node_t *node = queue_get_head();
+        do{
+            syslog(LOG_DEBUG, "Checking thread");
+            if(node == NULL){
+                syslog(LOG_ERR, "Node is NULL");
+                break;
+            }
+
+            if(node->data == NULL){
+                syslog(LOG_ERR, "Node data is NULL");
+                break;
+            }
+
+            thread_instance_t *thread_instance = (thread_instance_t *)node->data;
+            node = node->next;
+            
+            if(thread_instance == NULL){
+                syslog(LOG_ERR, "Thread instance is NULL");
+                continue;
+            }
+            if(thread_instance->thread_data == NULL){
+                syslog(LOG_ERR, "Thread data is NULL");
+                continue;
+            }
+
+            syslog(LOG_DEBUG, "Checking thread completion");
+
+            if(thread_instance->thread_data->thread_completed){
+                syslog(LOG_DEBUG, "Thread completed. Joining and freeing resources");
+                if(thread_instance->thread_data->client_fd != -1){
+                    close(thread_instance->thread_data->client_fd);
+                }
+                free(thread_instance->thread_data);
+                pthread_join(thread_instance->thread, NULL);
+                queue_remove(thread_instance);
+                free(thread_instance);
+                syslog(LOG_DEBUG, "Thread resources freed");
+            }
+        }while(node != NULL);
 
         syslog(LOG_DEBUG, "Thread queue checked");
 
