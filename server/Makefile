@@ -7,6 +7,6 @@ CC=$(CROSS_COMPILE)$(BASE_CC)
 all: $(OUTPUT_FILE)
 
 aesdsocket: aesdsocket.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -I . -o $(OUTPUT_FILE) aesdsocket.c thread_queue.c
+	$(CC) $(CFLAGS) -I . -o $(OUTPUT_FILE) aesdsocket.c thread_queue.c $(LDFLAGS)
 clean:
 	rm -f $(OUTPUT_FILE)
