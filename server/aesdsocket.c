@@ -26,12 +26,16 @@ void* connection_handler(void *current_thread_data){
         goto close_client;
     }
 
+    syslog(LOG_INFO, "Opening data file");
+
     FILE *data_file = fopen(DATA_FILE_NAME, "a+");
 
     if(data_file == NULL){
         syslog(LOG_ERR, "Error opening data file: %s", strerror(errno));
         goto close_client;
     }
+
+    syslog(LOG_INFO, "Data file opened");
 
     while((res = recv(thread_data->client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
         syslog(LOG_DEBUG, "Received %d bytes", res);
@@ -69,6 +73,8 @@ void* connection_handler(void *current_thread_data){
         memset(recv_buffer, 0, sizeof(recv_buffer));
     }
 
+    syslog(LOG_INFO, "Data sent to client");
+
 close_client_file:
     fclose(data_file);
 close_client:
@@ -85,7 +91,7 @@ close_client:
 
 int main(int argc, char **argv){
     struct addrinfo hints, *addr_res;
-    struct itimerval timer;
+    struct itimerspec timer;
     struct sigevent sev;
     timer_data_t timer_data;
     pthread_mutex_t file_mutex;
@@ -108,7 +114,6 @@ int main(int argc, char **argv){
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGALRM, &sa, NULL);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -181,6 +186,14 @@ int main(int argc, char **argv){
         goto exit;
     }
 
+    syslog(LOG_DEBUG, "Timer created");
+
+    res = timer_settime(timer_id, 0, &timer, NULL);
+    if(res != 0){
+        syslog(LOG_ERR, "timer_settime error: %s", strerror(errno));
+        goto exit;
+    }
+
     while(is_active){
         struct sockaddr_storage client_addr;
         client_thread_data_t *thread_data = NULL;
@@ -211,6 +224,7 @@ int main(int argc, char **argv){
         syslog(LOG_INFO, "Spawning new thread to handle connection from %s", thread_data->addr_str);
 
         thread_instance = (thread_instance_t *) malloc(sizeof(*thread_instance));
+        memset(thread_instance, 0, sizeof(*thread_instance));
 
         if(thread_instance == NULL){
             syslog(LOG_ERR, "Error allocating memory for thread instance: %s", strerror(errno));
@@ -218,11 +232,15 @@ int main(int argc, char **argv){
             continue;
         }
 
+        thread_instance->thread_data = thread_data;
+
         res = pthread_create(&(thread_instance->thread), NULL, connection_handler, (void *)thread_data);
         if(res != 0){
             syslog(LOG_ERR, "pthread_create error: %d", res);
             goto listener_free_thread_instance;
         }
+
+        syslog(LOG_INFO, "Thread spawned successfully");
 
         res = queue_enqueue(thread_instance);
         if(!res){
@@ -230,27 +248,38 @@ int main(int argc, char **argv){
             goto listener_kill_thread;
         }
 
-        node_t *node = queue_get_head();
-        do{
-            thread_instance_t *thread_instance = (thread_instance_t *)node->data;
-            if(thread_instance == NULL){
-                syslog(LOG_ERR, "Thread instance is NULL");
-                continue;
-            }
-            if(thread_instance->thread_data == NULL){
-                syslog(LOG_ERR, "Thread data is NULL");
-                continue;
-            }
-            if(thread_instance->thread_data->thread_completed){
-                if(thread_instance->thread_data->client_fd != -1){
-                    close(thread_instance->thread_data->client_fd);
-                }
-                free(thread_instance->thread_data);
-                pthread_join(thread_instance->thread, NULL);
-                queue_remove(thread_instance);
-                free(thread_instance);
-            }
-        }while((node = node->next) != NULL);
+        syslog(LOG_INFO, "Thread instance added to queue");
+
+        // node_t *node = queue_get_head();
+        // do{
+        //     syslog(LOG_INFO, "Checking thread");
+        //     if(node == NULL){
+        //         syslog(LOG_ERR, "Node is NULL");
+        //         break;
+        //     }
+        //     thread_instance_t *thread_instance = (thread_instance_t *)node->data;
+        //     if(thread_instance == NULL){
+        //         syslog(LOG_ERR, "Thread instance is NULL");
+        //         continue;
+        //     }
+        //     if(thread_instance->thread_data == NULL){
+        //         syslog(LOG_ERR, "Thread data is NULL");
+        //         continue;
+        //     }
+        //     if(thread_instance->thread_data->thread_completed){
+        //         syslog(LOG_INFO, "Thread completed. Joining and freeing resources");
+        //         if(thread_instance->thread_data->client_fd != -1){
+        //             close(thread_instance->thread_data->client_fd);
+        //         }
+        //         free(thread_instance->thread_data);
+        //         pthread_join(thread_instance->thread, NULL);
+        //         queue_remove(thread_instance);
+        //         free(thread_instance);
+        //         syslog(LOG_INFO, "Thread resources freed");
+        //     }
+        // }while((node = node->next) != NULL);
+
+        syslog(LOG_INFO, "Thread queue checked");
 
         continue;
 
@@ -263,6 +292,8 @@ int main(int argc, char **argv){
     listener_close_client:
         close(client_fd);
     }
+
+    syslog(LOG_DEBUG, "Cleaning allocated resources and threads");
 
     thread_instance_t *thread_instance;
     while ((thread_instance = (thread_instance_t *) queue_dequeue()) != NULL)
@@ -278,6 +309,8 @@ int main(int argc, char **argv){
             free(thread_instance);
         }
     }
+
+    syslog(LOG_DEBUG, "All threads cleaned");
 
 exit:
     if(timer_delete(timer_id) != 0){
