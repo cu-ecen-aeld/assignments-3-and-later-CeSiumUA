@@ -26,7 +26,7 @@ void* connection_handler(void *current_thread_data){
         goto close_client;
     }
 
-    syslog(LOG_INFO, "Opening data file");
+    syslog(LOG_DEBUG, "Opening data file");
 
     FILE *data_file = fopen(DATA_FILE_NAME, "a+");
 
@@ -35,7 +35,7 @@ void* connection_handler(void *current_thread_data){
         goto close_client;
     }
 
-    syslog(LOG_INFO, "Data file opened");
+    syslog(LOG_DEBUG, "Data file opened");
 
     while((res = recv(thread_data->client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
         syslog(LOG_DEBUG, "Received %d bytes", res);
@@ -221,7 +221,7 @@ int main(int argc, char **argv){
 
         syslog(LOG_INFO, "Accepted connection from %s", thread_data->addr_str);
 
-        syslog(LOG_INFO, "Spawning new thread to handle connection from %s", thread_data->addr_str);
+        syslog(LOG_DEBUG, "Spawning new thread to handle connection from %s", thread_data->addr_str);
 
         thread_instance = (thread_instance_t *) malloc(sizeof(*thread_instance));
         memset(thread_instance, 0, sizeof(*thread_instance));
@@ -248,11 +248,11 @@ int main(int argc, char **argv){
             goto listener_kill_thread;
         }
 
-        syslog(LOG_INFO, "Thread instance added to queue");
+        syslog(LOG_DEBUG, "Thread instance added to queue");
 
         // node_t *node = queue_get_head();
         // do{
-        //     syslog(LOG_INFO, "Checking thread");
+        //     syslog(LOG_DEBUG, "Checking thread");
         //     if(node == NULL){
         //         syslog(LOG_ERR, "Node is NULL");
         //         break;
@@ -267,7 +267,7 @@ int main(int argc, char **argv){
         //         continue;
         //     }
         //     if(thread_instance->thread_data->thread_completed){
-        //         syslog(LOG_INFO, "Thread completed. Joining and freeing resources");
+        //         syslog(LOG_DEBUG, "Thread completed. Joining and freeing resources");
         //         if(thread_instance->thread_data->client_fd != -1){
         //             close(thread_instance->thread_data->client_fd);
         //         }
@@ -275,11 +275,11 @@ int main(int argc, char **argv){
         //         pthread_join(thread_instance->thread, NULL);
         //         queue_remove(thread_instance);
         //         free(thread_instance);
-        //         syslog(LOG_INFO, "Thread resources freed");
+        //         syslog(LOG_DEBUG, "Thread resources freed");
         //     }
         // }while((node = node->next) != NULL);
 
-        syslog(LOG_INFO, "Thread queue checked");
+        syslog(LOG_DEBUG, "Thread queue checked");
 
         continue;
 
@@ -396,7 +396,7 @@ static void timer_expired_handler(union sigval sv){
         goto timer_expired_exit;
     }
 
-    syslog(LOG_INFO, "Current time: %s", time_str);
+    syslog(LOG_DEBUG, "Current time: %s", time_str);
 
     timer_data = (timer_data_t *) sv.sival_ptr;
     if(timer_data == NULL){
