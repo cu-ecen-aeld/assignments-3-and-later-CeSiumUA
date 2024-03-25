@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <time.h>
 
 typedef struct client_thread_data{
     int client_fd;
