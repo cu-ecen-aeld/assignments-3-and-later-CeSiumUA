@@ -18,6 +18,8 @@
 #include <signal.h>
 #include <thread_queue.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <sys/time.h>
 
 typedef struct client_thread_data{
     int client_fd;
@@ -25,6 +27,10 @@ typedef struct client_thread_data{
     pthread_mutex_t *mutex;
     bool thread_completed;
 } client_thread_data_t;
+
+typedef struct timer_data{
+    pthread_mutex_t *mutex;
+} timer_data_t;
 
 typedef struct thread_instance{
     pthread_t thread;

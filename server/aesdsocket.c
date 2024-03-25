@@ -2,11 +2,11 @@
 
 bool is_active = true;
 int sockfd = -1;
-struct slist_head list_head;
 
 static void remove_data_file(void);
 static void *get_in_addr(struct sockaddr *sa);
 static void signal_handler(int sig);
+static void timer_expired_handler(union sigval sv);
 
 void* connection_handler(void *current_thread_data){
     int res;
@@ -85,12 +85,15 @@ close_client:
 
 int main(int argc, char **argv){
     struct addrinfo hints, *addr_res;
+    struct itimerval timer;
+    struct sigevent sev;
+    timer_data_t timer_data;
     pthread_mutex_t file_mutex;
+    timer_t timer_id;
     struct sigaction sa = {0};
     int client_fd = -1;
     int res;
     int return_val = 0;
-
     bool start_in_daemon = false;
 
     openlog(argv[0], LOG_PID, LOG_USER);
@@ -105,6 +108,7 @@ int main(int argc, char **argv){
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGALRM, &sa, NULL);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -161,7 +165,21 @@ int main(int argc, char **argv){
         goto exit;
     }
 
-    SLIST_INIT(&list_head);
+    memset(&timer, 0, sizeof(timer));
+    timer.it_value.tv_sec = 10;
+    timer.it_interval.tv_sec = 10;
+
+    timer_data.mutex = &file_mutex;
+
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_notify_function = &timer_expired_handler;
+    sev.sigev_value.sival_ptr = &timer_data;
+
+    res = timer_create(CLOCK_MONOTONIC, &sev, &timer_id);
+    if(res != 0){
+        syslog(LOG_ERR, "timer_create error: %s", strerror(errno));
+        goto exit;
+    }
 
     while(is_active){
         struct sockaddr_storage client_addr;
@@ -262,7 +280,12 @@ int main(int argc, char **argv){
     }
 
 exit:
-    pthread_mutex_destroy(&file_mutex);
+    if(timer_delete(timer_id) != 0){
+        syslog(LOG_ERR, "timer_delete error: %s", strerror(errno));
+    }
+    if(pthread_mutex_destroy(&file_mutex) != 0){
+        syslog(LOG_ERR, "pthread_mutex_destroy error: %s", strerror(errno));
+    }
     freeaddrinfo(addr_res);
     close(sockfd);
     sockfd = -1;
@@ -287,14 +310,91 @@ static void *get_in_addr(struct sockaddr *sa){
 }
 
 static void signal_handler(int sig){
+    int old_errno = errno;
     if(sig == SIGINT || sig == SIGTERM){
-        int old_errno = errno;
         syslog(LOG_INFO, "Received SIGINT/SIGTERM (%d). Shutting down...", sig);
         is_active = false;
         if(sockfd != -1){
             shutdown(sockfd, SHUT_RDWR);
         }
-
-        errno = old_errno;
     }
+    else if(sig == SIGALRM){
+        syslog(LOG_INFO, "Received SIGALRM (%d)", sig);
+    }
+
+    errno = old_errno;
+}
+
+static void timer_expired_handler(union sigval sv){
+    syslog(LOG_INFO, "Timer event invoked");
+
+    time_t curr_time;
+    struct tm *time_info;
+    struct tm *time_info_saved;
+    timer_data_t *timer_data = NULL;
+    int res;
+    int str_size;
+    char time_str[1024] = {0};
+
+    curr_time = time(NULL);
+    if(curr_time == -1){
+        syslog(LOG_ERR, "time error: %s", strerror(errno));
+        return;
+    }
+
+    time_info = (struct tm *) malloc(sizeof(*time_info));
+    if(time_info == NULL){
+        syslog(LOG_ERR, "Error allocating memory for time info");
+        return;
+    }
+
+    time_info_saved = time_info;
+    time_info = localtime_r(&curr_time, time_info);
+
+    if(time_info == NULL){
+        syslog(LOG_ERR, "localtime_r error: %s", strerror(errno));
+        time_info = time_info_saved;
+        goto timer_expired_exit;
+    }
+
+    str_size = strftime(time_str, sizeof(time_str), "timestamp: %Y, %m, %d, %H, %M, %S\n", time_info);
+    if(str_size == 0){
+        syslog(LOG_ERR, "strftime error: %s", strerror(errno));
+        goto timer_expired_exit;
+    }
+
+    syslog(LOG_INFO, "Current time: %s", time_str);
+
+    timer_data = (timer_data_t *) sv.sival_ptr;
+    if(timer_data == NULL){
+        syslog(LOG_ERR, "Timer data is NULL");
+        goto timer_expired_exit;
+    }
+
+    res = pthread_mutex_lock(timer_data->mutex);
+    if(res != 0){
+        syslog(LOG_ERR, "pthread_mutex_lock error: %d", res);
+        goto timer_expired_exit;
+    }
+
+    FILE *data_file = fopen(DATA_FILE_NAME, "a+");
+
+    if(data_file == NULL){
+        syslog(LOG_ERR, "Error opening data file: %s", strerror(errno));
+        goto timer_expired_exit;
+    }
+
+    res = fwrite(time_str, sizeof(*time_str), str_size, data_file);
+    if(res != str_size){
+        syslog(LOG_ERR, "fwrite error: %s", strerror(errno));
+        goto timer_expired_close_file;
+    }
+
+    syslog(LOG_INFO, "Wrote timestamp to data file");
+
+timer_expired_close_file:
+    fclose(data_file);
+    pthread_mutex_unlock(timer_data->mutex);
+timer_expired_exit:
+    free(time_info);
 }

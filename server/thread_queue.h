@@ -4,10 +4,11 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <syslog.h>
+#include <stdlib.h>
 
 typedef struct node {
     void *data;
-    node_t *next;
+    struct node *next;
 } node_t;
 
 bool queue_enqueue(void *data);
