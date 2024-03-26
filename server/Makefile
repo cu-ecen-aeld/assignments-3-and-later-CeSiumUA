@@ -1,12 +1,12 @@
 BASE_CC = gcc
-CFLAGS = -g -Wall -Wextra
-LDFLAGS = -lpthread -lrt
-OUTPUT_FILE = aesdsocket
-CC=$(CROSS_COMPILE)$(BASE_CC)
+CFLAGS ?= -g -Wall -Wextra
+LDFLAGS ?= -lpthread -lrt
+TARGET ?= aesdsocket
+CC ?= $(CROSS_COMPILE)$(BASE_CC)
 
-all: $(OUTPUT_FILE)
+all: $(TARGET)
 
-aesdsocket: aesdsocket.c
-	$(CC) $(CFLAGS) -I . -o $(OUTPUT_FILE) aesdsocket.c thread_queue.c $(LDFLAGS)
+aesdsocket: aesdsocket.c thread_queue.c
+	$(CC) $(CFLAGS) -I . -o $(TARGET) aesdsocket.c thread_queue.c $(LDFLAGS)
 clean:
-	rm -f $(OUTPUT_FILE)
+	rm -f $(TARGET)
