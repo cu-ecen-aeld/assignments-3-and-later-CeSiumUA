@@ -179,6 +179,7 @@ int main(int argc, char **argv){
     sev.sigev_notify = SIGEV_THREAD;
     sev.sigev_notify_function = &timer_expired_handler;
     sev.sigev_value.sival_ptr = &timer_data;
+    sev.sigev_notify_attributes = NULL;
 
     res = timer_create(CLOCK_MONOTONIC, &sev, &timer_id);
     if(res != 0){
