@@ -14,6 +14,12 @@
 #include <stddef.h> // size_t
 #include <stdint.h> // uintx_t
 #include <stdbool.h>
+#include <stdio.h>
+#endif
+
+#ifdef __KERNEL__
+#else
+#define DEBUG_LOG(X)                            printf X
 #endif
 
 #define AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED 10

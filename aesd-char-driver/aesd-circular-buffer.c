@@ -31,16 +31,24 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 {
     int composed_length = 0;
 
-    for(int i = buffer->out_offs; i != buffer->in_offs; i = (i + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-    {
-        composed_length += buffer->entry[i].size;
+    DEBUG_LOG(("initial pos: out: %d in: %d, searched len: %ld\n", buffer->out_offs, buffer->in_offs, char_offset));
 
+    for(int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
+    {
+        int buff_idx = (buffer->out_offs + i) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        DEBUG_LOG(("i: %d\n", i));
+        composed_length += buffer->entry[buff_idx].size;
+        DEBUG_LOG(("composed_length: %d\n", composed_length));
         if(composed_length > char_offset)
         {
-            *entry_offset_byte_rtn = char_offset - (composed_length - buffer->entry[i].size);
-            return &(buffer->entry[i]);
+            *entry_offset_byte_rtn = char_offset - (composed_length - buffer->entry[buff_idx].size);
+            DEBUG_LOG(("entry_offset_byte_rtn: %ld\n", *entry_offset_byte_rtn));
+            DEBUG_LOG(("entry str: %s\n", buffer->entry[buff_idx].buffptr));
+            return &(buffer->entry[buff_idx]);
         }
     }
+
+    DEBUG_LOG(("didn't find\n"));
 
     return NULL;
 }
@@ -60,18 +68,18 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     }
 
     buffer->entry[buffer->in_offs] = *add_entry;
+    
+    buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
     if(buffer->full)
     {
         buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     }
 
-    if((buffer->in_offs + 1) >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED - 1)
+    if(buffer->in_offs == 0)
     {
         buffer->full = true;
     }
-
-    buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 }
 
 /**
