@@ -19,7 +19,7 @@
 
 #ifdef __KERNEL__
 #else
-#define DEBUG_LOG(X)                            printf X
+#define DEBUG_LOG(fmt, args...)                            printf(fmt, ## args)
 #endif
 
 #define AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED 10
