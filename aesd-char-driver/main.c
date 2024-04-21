@@ -234,9 +234,18 @@ void aesd_cleanup_module(void)
 
     cdev_del(&aesd_device.cdev);
 
-    /**
-     * TODO: cleanup AESD specific poritions here as necessary
-     */
+    uint8_t index;
+    struct aesd_buffer_entry *entry = NULL;
+
+    AESD_CIRCULAR_BUFFER_FOREACH(entry,&aesd_device.circular_buf,index) {
+        if(entry->buffptr != NULL)
+        {
+            kfree(entry->buffptr);
+            entry->buffptr = NULL;
+        }
+    }
+
+    mutex_destroy(&aesd_device.mutex_lock);
 
     unregister_chrdev_region(devno, 1);
 }
