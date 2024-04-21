@@ -81,7 +81,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     }
 
     entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circular_buf, *f_pos, &entry_offset);
-    if(entry == NULL){
+    if(entry == NULL)
+    {
         retval = bytes_read;
         goto aesd_read_exit;
     }
@@ -95,15 +96,15 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
     retval = copy_to_user(buf, entry->buffptr + entry_offset, bytes_read);
 
-    if(retval != 0){
+    if(retval != 0)
+    {
+        // FIXME - not all bytes could be transfered, so it could be possible to continue execution even if retval != 0
         PERROR("copy_to_user failed");
         retval = -EFAULT;
         goto aesd_read_exit;
     }
 
-    // May not work on all systems...
-    retval = bytes_read - retval;
-    *f_pos += retval;
+    *f_pos += bytes_read;
 
 aesd_read_exit:
     mutex_unlock(&dev->mutex_lock);
@@ -113,11 +114,69 @@ aesd_read_exit:
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
-    ssize_t retval = -ENOMEM;
+    ssize_t retval = 0;
+    struct aesd_dev *dev = NULL;
+    const char *free_buffer_ptr = NULL;
+
+    if(filp == NULL || buf == NULL)
+    {
+        PERROR("invalid arguments");
+        return -EINVAL;
+    }
+    
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
+
+    dev = filp->private_data;
+
+    if(dev == NULL)
+    {
+        PERROR("device not found");
+        return -ENODEV;
+    }
+
+    if(mutex_lock_interruptible(&dev->mutex_lock))
+    {
+        PERROR("unable to acquire mutex");
+        return -ERESTARTSYS;
+    }
+
+    size_t new_entry_size = (dev->buf_entry.size + count);
+
+    dev->buf_entry.buffptr = krealloc(dev->buf_entry.buffptr, new_entry_size, GFP_KERNEL);
+    if(dev->buf_entry.buffptr == NULL)
+    {
+        PERROR("unable to allocate %lu bytes of memory", new_entry_size);
+        retval = -ENOMEM;
+        goto aesd_write_exit;
+    }
+
+    retval = copy_from_user((dev->buf_entry.buffptr + dev->buf_entry.size), buf, count);
+    if(retval != 0)
+    {
+        // FIXME - not all bytes could be transfered, so it could be possible to continue execution even if retval != 0
+        PERROR("copy_from_user failed");
+        retval = -EFAULT;
+        goto aesd_write_exit;
+    }
+
+    dev->buf_entry.size += count;
+
+    if(dev->buf_entry.buffptr[dev->buf_entry.size - 1] == '\n')
+    {
+        free_buffer_ptr = aesd_circular_buffer_add_entry(&dev->circular_buf, &dev->buf_entry);
+
+        if(free_buffer_ptr != NULL)
+        {
+            kfree(free_buffer_ptr);
+            free_buffer_ptr = NULL;
+        }
+
+        dev->buf_entry.buffptr = NULL;
+        dev->buf_entry.size = 0;
+    }
+
+aesd_write_exit:
+    mutex_unlock(&dev->mutex_lock);
     return retval;
 }
 struct file_operations aesd_fops = {

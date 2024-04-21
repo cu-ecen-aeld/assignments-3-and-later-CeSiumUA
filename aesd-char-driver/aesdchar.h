@@ -46,6 +46,7 @@
 struct aesd_dev
 {
 	struct aesd_circular_buffer circular_buf;
+	struct aesd_buffer_entry buf_entry;
     struct mutex mutex_lock;
     struct cdev cdev;
 };
