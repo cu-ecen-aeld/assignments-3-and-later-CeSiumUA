@@ -17,16 +17,6 @@
 #include <stdio.h>
 #endif
 
-#ifdef __KERNEL__
-#define DEBUG_LOG(fmt, args...)                            printk(KERN_DEBUG fmt, ## args)
-#define INFO_LOG(fmt, args...)                             printk(KERN_INFO fmt, ## args)
-#define ERROR_LOG(fmt, args...)                            printk(KERN_ERR fmt, ## args)
-#else
-#define DEBUG_LOG(fmt, args...)                            printf(fmt, ## args)
-#define INFO_LOG(fmt, args...)                             printf(fmt, ## args)
-#define ERROR_LOG(fmt, args...)                            fprintf(stderr, fmt, ## args)
-#endif
-
 #define AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED 10
 
 struct aesd_buffer_entry
