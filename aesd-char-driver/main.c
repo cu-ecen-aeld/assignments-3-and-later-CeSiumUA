@@ -29,18 +29,22 @@ struct aesd_dev aesd_device;
 int aesd_open(struct inode *inode, struct file *filp)
 {
     PDEBUG("open");
-    /**
-     * TODO: handle open
-     */
+
+    struct aesd_dev *dev = NULL;
+    
+    dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
+
+    filp->private_data = dev;
+
     return 0;
 }
 
 int aesd_release(struct inode *inode, struct file *filp)
 {
     PDEBUG("release");
-    /**
-     * TODO: handle release
-     */
+
+    filp->private_data = NULL;
+
     return 0;
 }
 
@@ -48,10 +52,60 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = 0;
+    ssize_t bytes_read = 0;
+    size_t entry_offset = 0;
+    struct aesd_buffer_entry *entry = NULL;
+    struct aesd_dev *dev = NULL;
+
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
+    
+    if(filp == NULL || buf == NULL)
+    {
+        PERROR("invalid arguments");
+        return -EINVAL;
+    }
+
+    dev = filp->private_data;
+
+    if(dev == NULL)
+    {
+        PERROR("device not found");
+        return -ENODEV;
+    }
+
+    if(mutex_lock_interruptible(&dev->mutex_lock))
+    {
+        PERROR("unable to acquire mutex");
+        return -ERESTARTSYS;
+    }
+
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circular_buf, *f_pos, &entry_offset);
+    if(entry == NULL){
+        retval = bytes_read;
+        goto aesd_read_exit;
+    }
+
+    bytes_read = entry->size - entry_offset;
+
+    if(bytes_read > count)
+    {
+        bytes_read = count;
+    }
+
+    retval = copy_to_user(buf, entry->buffptr + entry_offset, bytes_read);
+
+    if(retval != 0){
+        PERROR("copy_to_user failed");
+        retval = -EFAULT;
+        goto aesd_read_exit;
+    }
+
+    // May not work on all systems...
+    retval = bytes_read - retval;
+    *f_pos += retval;
+
+aesd_read_exit:
+    mutex_unlock(&dev->mutex_lock);
     return retval;
 }
 
@@ -102,9 +156,8 @@ int aesd_init_module(void)
     }
     memset(&aesd_device,0,sizeof(struct aesd_dev));
 
-    /**
-     * TODO: initialize the AESD specific portion of the device
-     */
+    mutex_init(&aesd_device.mutex_lock);
+    aesd_circular_buffer_init(&aesd_device.circular_buf);
 
     result = aesd_setup_cdev(&aesd_device);
 
