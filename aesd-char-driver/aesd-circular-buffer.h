@@ -18,7 +18,7 @@
 #endif
 
 #ifdef __KERNEL__
-#define DEBUG_LOG(fmt, args...)
+#define DEBUG_LOG(fmt, args...)                            printk(KERN_DEBUG fmt, ## args)
 #else
 #define DEBUG_LOG(fmt, args...)                            printf(fmt, ## args)
 #endif
