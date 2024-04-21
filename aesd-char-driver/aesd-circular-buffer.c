@@ -31,6 +31,11 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 {
     int composed_length = 0;
 
+    if(buffer == NULL || entry_offset_byte_rtn == NULL)
+    {
+        goto find_entry_offset_for_fpos_exit;
+    }
+
     PDEBUG("initial pos: out: %d in: %d, searched len: %ld\n", buffer->out_offs, buffer->in_offs, char_offset);
 
     for(int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
@@ -50,6 +55,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 
     PDEBUG("didn't find\n");
 
+find_entry_offset_for_fpos_exit:
     return NULL;
 }
 
@@ -66,7 +72,7 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
 
     if(buffer == NULL || add_entry == NULL)
     {
-        return old_ptr;
+        goto add_entry_exit;
     }
 
     if(buffer->full)
@@ -88,6 +94,7 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
         buffer->full = true;
     }
 
+add_entry_exit:
     return old_ptr;
 }
 
