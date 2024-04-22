@@ -6,7 +6,9 @@ int sockfd = -1;
 static void remove_data_file(void);
 static void *get_in_addr(struct sockaddr *sa);
 static void signal_handler(int sig);
+#if USE_AESD_CHAR_DEVICE == 0
 static void timer_expired_handler(union sigval sv);
+#endif
 
 void* connection_handler(void *current_thread_data){
     int res;
@@ -91,11 +93,13 @@ close_client:
 
 int main(int argc, char **argv){
     struct addrinfo hints, *addr_res;
+#if USE_AESD_CHAR_DEVICE == 0
     struct itimerspec timer;
     struct sigevent sev;
     timer_data_t timer_data;
-    pthread_mutex_t file_mutex;
     timer_t timer_id;
+#endif
+    pthread_mutex_t file_mutex;
     struct sigaction sa = {0};
     int client_fd = -1;
     int res;
@@ -170,6 +174,7 @@ int main(int argc, char **argv){
         goto exit;
     }
 
+#if USE_AESD_CHAR_DEVICE == 0
     memset(&timer, 0, sizeof(timer));
     timer.it_value.tv_sec = 10;
     timer.it_interval.tv_sec = 10;
@@ -194,6 +199,7 @@ int main(int argc, char **argv){
         syslog(LOG_ERR, "timer_settime error: %s", strerror(errno));
         goto exit;
     }
+#endif
 
     while(is_active){
         struct sockaddr_storage client_addr;
@@ -325,12 +331,14 @@ int main(int argc, char **argv){
     syslog(LOG_DEBUG, "All threads cleaned");
 
 exit:
+#if USE_AESD_CHAR_DEVICE == 0
     if(timer_delete(timer_id) != 0){
         syslog(LOG_ERR, "timer_delete error: %s", strerror(errno));
     }
     if(pthread_mutex_destroy(&file_mutex) != 0){
         syslog(LOG_ERR, "pthread_mutex_destroy error: %s", strerror(errno));
     }
+#endif
     freeaddrinfo(addr_res);
     close(sockfd);
     sockfd = -1;
@@ -340,11 +348,15 @@ exit:
 }
 
 static void remove_data_file(void){
+#if USE_AESD_CHAR_DEVICE == 0
     if(remove(DATA_FILE_NAME) == 0){
         syslog(LOG_INFO, "Removed data file");
     } else {
         syslog(LOG_ERR, "Error removing data file: %s", strerror(errno));
     }
+#else
+    syslog(LOG_INFO, "using  aesd char device, not removing data file");
+#endif
 }
 
 static void *get_in_addr(struct sockaddr *sa){
@@ -370,6 +382,7 @@ static void signal_handler(int sig){
     errno = old_errno;
 }
 
+#if USE_AESD_CHAR_DEVICE == 0
 static void timer_expired_handler(union sigval sv){
     syslog(LOG_INFO, "Timer event invoked");
 
@@ -443,3 +456,4 @@ timer_expired_close_file:
 timer_expired_exit:
     free(time_info);
 }
+#endif

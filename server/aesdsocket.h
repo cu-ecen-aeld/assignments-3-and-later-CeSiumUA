@@ -38,9 +38,17 @@ typedef struct thread_instance{
     client_thread_data_t *thread_data;
 } thread_instance_t;
 
-#define DAEMON_KEY          "-d"
-#define PORT                "9000"
-#define DATA_FILE_NAME      "/var/tmp/aesdsocketdata"
-#define RECV_BUFFER_LEN     512
+#define DAEMON_KEY              "-d"
+#define PORT                    "9000"
+
+#define USE_AESD_CHAR_DEVICE    (1)
+
+#if USE_AESD_CHAR_DEVICE == 1
+#define DATA_FILE_NAME          "/dev/aesdchar"
+#else
+#define DATA_FILE_NAME          "/var/tmp/aesdsocketdata"
+#endif
+
+#define RECV_BUFFER_LEN         512
 
 #endif
