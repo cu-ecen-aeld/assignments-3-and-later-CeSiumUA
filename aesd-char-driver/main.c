@@ -17,7 +17,7 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
-#include "aesdchar.h"
+#include "aesd-circular-buffer.h"
 
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -29,9 +29,9 @@ struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
-    PDEBUG("open");
-
     struct aesd_dev *dev = NULL;
+
+    PDEBUG("open");
     
     dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
 
@@ -117,6 +117,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     ssize_t retval = 0;
     struct aesd_dev *dev = NULL;
     const char *free_buffer_ptr = NULL;
+    size_t new_entry_size = 0;
 
     if(filp == NULL || buf == NULL)
     {
@@ -140,7 +141,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         return -ERESTARTSYS;
     }
 
-    size_t new_entry_size = (dev->buf_entry.size + count);
+    new_entry_size = (dev->buf_entry.size + count);
 
     dev->buf_entry.buffptr = krealloc(dev->buf_entry.buffptr, new_entry_size, GFP_KERNEL);
     if(dev->buf_entry.buffptr == NULL)
@@ -150,7 +151,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         goto aesd_write_exit;
     }
 
-    retval = copy_from_user((dev->buf_entry.buffptr + dev->buf_entry.size), buf, count);
+    retval = copy_from_user((void *)(dev->buf_entry.buffptr + dev->buf_entry.size), buf, count);
     if(retval != 0)
     {
         // FIXME - not all bytes could be transfered, so it could be possible to continue execution even if retval != 0
@@ -230,12 +231,12 @@ int aesd_init_module(void)
 
 void aesd_cleanup_module(void)
 {
+    uint8_t index = 0;
+    struct aesd_buffer_entry *entry = NULL;
+
     dev_t devno = MKDEV(aesd_major, aesd_minor);
 
     cdev_del(&aesd_device.cdev);
-
-    uint8_t index;
-    struct aesd_buffer_entry *entry = NULL;
 
     AESD_CIRCULAR_BUFFER_FOREACH(entry,&aesd_device.circular_buf,index) {
         if(entry->buffptr != NULL)
