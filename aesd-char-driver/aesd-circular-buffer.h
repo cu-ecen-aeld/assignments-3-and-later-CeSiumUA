@@ -10,6 +10,17 @@
 
 #include "aesdchar.h"
 
+#ifdef __KERNEL__
+#include <linux/types.h>
+#include <linux/mutex.h>
+#include <linux/cdev.h>
+#else
+#include <stddef.h> // size_t
+#include <stdint.h> // uintx_t
+#include <stdbool.h>
+#include <stdio.h>
+#endif
+
 #define AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED 10
 
 struct aesd_buffer_entry
@@ -29,7 +40,7 @@ struct aesd_circular_buffer
     /**
      * An array of pointers to memory allocated for the most recent write operations
      */
-    struct aesd_buffer_entry  entry[AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
+    struct aesd_buffer_entry entry[AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED];
     /**
      * The current location in the entry structure where the next write should
      * be stored.
@@ -43,6 +54,14 @@ struct aesd_circular_buffer
      * set to true when the buffer entry structure is full
      */
     bool full;
+};
+
+struct aesd_dev
+{
+	struct aesd_buffer_entry buf_entry;
+	struct aesd_circular_buffer circular_buf;
+    struct mutex mutex_lock;
+    struct cdev cdev;
 };
 
 extern struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
@@ -70,7 +89,5 @@ extern void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer);
     for(index=0, entryptr=&((buffer)->entry[index]); \
             index<AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; \
             index++, entryptr=&((buffer)->entry[index]))
-
-
 
 #endif /* AESD_CIRCULAR_BUFFER_H */

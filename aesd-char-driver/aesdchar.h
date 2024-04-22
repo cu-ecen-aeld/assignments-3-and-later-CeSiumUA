@@ -8,6 +8,8 @@
 #ifndef AESD_CHAR_DRIVER_AESDCHAR_H_
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
 
+// #include "aesd-circular-buffer.h"
+
 #ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/mutex.h>
@@ -18,8 +20,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #endif
-
-#include "aesd-circular-buffer.h"
 
 #define AESD_DEBUG 1  //Remove comment on this line to enable debug
 
@@ -42,14 +42,6 @@
 #else
 #  define PDEBUG(fmt, args...) /* not debugging: nothing */
 #endif
-
-struct aesd_dev
-{
-	struct aesd_circular_buffer circular_buf;
-	struct aesd_buffer_entry buf_entry;
-    struct mutex mutex_lock;
-    struct cdev cdev;
-};
 
 
 #endif /* AESD_CHAR_DRIVER_AESDCHAR_H_ */
