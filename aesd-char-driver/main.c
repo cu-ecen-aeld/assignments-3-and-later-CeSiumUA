@@ -161,6 +161,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     }
 
     dev->buf_entry.size += count;
+    retval = count;
 
     if(dev->buf_entry.buffptr[dev->buf_entry.size - 1] == '\n')
     {
