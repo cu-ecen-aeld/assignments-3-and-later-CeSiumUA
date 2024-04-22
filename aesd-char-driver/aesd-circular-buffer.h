@@ -8,8 +8,6 @@
 #ifndef AESD_CIRCULAR_BUFFER_H
 #define AESD_CIRCULAR_BUFFER_H
 
-#include "aesdchar.h"
-
 #ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/mutex.h>
@@ -22,6 +20,28 @@
 #endif
 
 #define AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED 10
+
+#define AESD_DEBUG 1  //Remove comment on this line to enable debug
+
+#undef PDEBUG             /* undef it, just in case */
+#undef PINFO
+#undef PERROR
+
+#ifdef AESD_DEBUG
+#ifdef __KERNEL__
+    /* This one if debugging is on, and kernel space */
+#	define PDEBUG(fmt, args...) printk( KERN_DEBUG "aesdchar: " fmt, ## args)
+#	define PINFO(fmt, args...) printk( KERN_INFO "aesdchar: " fmt, ## args)
+#	define PERROR(fmt, args...) printk( KERN_ERR "aesdchar: " fmt, ## args)
+#else
+    /* This one for user space */
+#	define PDEBUG(fmt, args...) fprintf(stderr, fmt, ## args)
+#	define PINFO(fmt, args...) fprintf(stderr, fmt, ## args)
+#	define PERROR(fmt, args...) fprintf(stderr, fmt, ## args)
+#endif
+#else
+#  define PDEBUG(fmt, args...) /* not debugging: nothing */
+#endif
 
 struct aesd_buffer_entry
 {
@@ -54,14 +74,6 @@ struct aesd_circular_buffer
      * set to true when the buffer entry structure is full
      */
     bool full;
-};
-
-struct aesd_dev
-{
-	struct aesd_buffer_entry buf_entry;
-	struct aesd_circular_buffer circular_buf;
-    struct mutex mutex_lock;
-    struct cdev cdev;
 };
 
 extern struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
