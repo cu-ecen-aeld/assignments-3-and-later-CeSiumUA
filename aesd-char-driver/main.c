@@ -16,6 +16,8 @@
 #include <linux/printk.h>
 #include <linux/types.h>
 #include <linux/cdev.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
 
