@@ -30,6 +30,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
     int composed_length = 0;
+    int i;
 
     if(buffer == NULL || entry_offset_byte_rtn == NULL)
     {
@@ -38,7 +39,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 
     PDEBUG("initial pos: out: %d in: %d, searched len: %ld\n", buffer->out_offs, buffer->in_offs, char_offset);
 
-    for(int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
+    for(i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
     {
         int buff_idx = (buffer->out_offs + i) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
         PDEBUG("i: %d\n", i);
