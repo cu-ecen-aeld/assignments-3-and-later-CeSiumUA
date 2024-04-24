@@ -60,10 +60,12 @@ void* connection_handler(void *current_thread_data){
         goto close_client_file;
     }
 
+#if USE_AESD_CHAR_DEVICE == 0
     if(fseek(data_file, 0, SEEK_SET) == -1){
         syslog(LOG_ERR, "Error seeking data file: %s", strerror(errno));
         goto close_client_file;
     }
+#endif
 
     while((res = fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file)) > 0){
         syslog(LOG_DEBUG, "Sending %d bytes", res);
@@ -107,6 +109,12 @@ int main(int argc, char **argv){
     bool start_in_daemon = false;
 
     openlog(argv[0], LOG_PID, LOG_USER);
+
+#if USE_AESD_CHAR_DEVICE == 1
+    syslog(LOG_INFO, "compiled to work with char device");
+#else
+    syslog(LOG_INFO, "compiled to work with temp file");
+#endif
 
     if(argc == 2 && strcmp(argv[1], DAEMON_KEY) == 0){
         syslog(LOG_DEBUG, "daemon flag provided, server will start in daemon mode");
