@@ -184,12 +184,47 @@ aesd_write_exit:
     mutex_unlock(&dev->mutex_lock);
     return retval;
 }
+
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
+{
+    loff_t newpos = 0;
+    loff_t size = 0;
+    struct aesd_buffer_entry *entry = NULL;
+    struct aesd_circular_buffer *circular_buf = NULL;
+    struct aesd_dev *dev = NULL;
+
+    PDEBUG("llseek %lld %d",off,whence);
+
+    dev = filp->private_data;
+
+    if(dev == NULL)
+    {
+        PERROR("device not found");
+        return -ENODEV;
+    }
+
+    circular_buf = &dev->circular_buf;
+
+    mutex_lock(&dev->mutex_lock);
+
+    AESD_CIRCULAR_BUFFER_FOREACH(entry,circular_buf,size) {
+        size += dev->buf_entry.size;
+    }
+
+    mutex_unlock(&dev->mutex_lock);
+
+    newpos = fixed_size_llseek(filp, off, whence, size);
+    
+    return newpos;
+}
+
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
     .read =     aesd_read,
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
+    .llseek =   aesd_llseek,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
