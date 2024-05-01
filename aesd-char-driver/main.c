@@ -20,6 +20,7 @@
 #include <linux/uaccess.h>
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
+#include "aesd_ioctl.h"
 
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -218,13 +219,105 @@ loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
     return newpos;
 }
 
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
+    long retval = 0;
+    struct aesd_seekto aesd_seek;
+    struct aesd_dev *dev = NULL;
+    struct aesd_circular_buffer *circular_buffer = NULL;
+    int available_entries = 0;
+    int command_idx = 0;
+    size_t entry_offset = 0;
+    int i = 0;
+
+    dev = filp->private_data;
+    if(dev == NULL)
+    {
+        PERROR("device not found");
+        return -ENODEV;
+    }
+
+    circular_buffer = &dev->circular_buf;
+    if(circular_buffer == NULL)
+    {
+        PERROR("circular buffer not found");
+        return -ENODEV;
+    }
+    
+    if(_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
+    {
+        PERROR("invalid ioctl magic");
+        return -ENOTTY;
+    }
+    else if(_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
+    {
+        PERROR("invalid ioctl command");
+        return -ENOTTY;
+    }
+
+    if(cmd != AESDCHAR_IOCSEEKTO)
+    {
+        PERROR("invalid ioctl command");
+        return -ENOTTY;
+    }
+
+    if(copy_from_user(&aesd_seek, (const void __user *)arg, sizeof(struct aesd_seekto)))
+    {
+        PERROR("copy_from_user failed");
+        return -EFAULT;
+    }
+
+    if(mutex_lock_interruptible(&dev->mutex_lock))
+    {
+        PERROR("unable to acquire mutex");
+        return -ERESTARTSYS;
+    }
+
+    available_entries = circular_buffer->in_offs - circular_buffer->out_offs;
+    if(circular_buffer->full){
+        available_entries = AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    }
+
+    if(aesd_seek.write_cmd >= available_entries)
+    {
+        PERROR("invalid write command");
+        retval = -EINVAL;
+        goto aesd_ioctl_exit;
+    }
+
+    command_idx = (circular_buffer->out_offs + aesd_seek.write_cmd) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    i = circular_buffer->out_offs;
+
+    while(i != command_idx)
+    {
+        entry_offset += circular_buffer->entry[i].size;
+        i = (i + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    }
+
+    if(circular_buffer->entry[i].size < aesd_seek.write_cmd_offset)
+    {
+        PERROR("invalid write command offset");
+        retval = -EINVAL;
+        goto aesd_ioctl_exit;
+    }
+
+    entry_offset += aesd_seek.write_cmd_offset;
+
+    filp->f_pos = entry_offset;
+
+aesd_ioctl_exit:
+    mutex_unlock(&dev->mutex_lock);
+
+    return retval;
+}
+
 struct file_operations aesd_fops = {
-    .owner =    THIS_MODULE,
-    .read =     aesd_read,
-    .write =    aesd_write,
-    .open =     aesd_open,
-    .release =  aesd_release,
-    .llseek =   aesd_llseek,
+    .owner =            THIS_MODULE,
+    .read =             aesd_read,
+    .write =            aesd_write,
+    .open =             aesd_open,
+    .release =          aesd_release,
+    .llseek =           aesd_llseek,
+    .unlocked_ioctl =   aesd_ioctl
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
