@@ -41,8 +41,43 @@ void* connection_handler(void *current_thread_data){
 
     while((res = recv(thread_data->client_fd, recv_buffer, sizeof(recv_buffer), 0)) > 0){
         syslog(LOG_DEBUG, "Received %d bytes", res);
+#if USE_AESD_CHAR_DEVICE == 1
+        if(res >= (int)AESD_SEEKTO_KEYWORD_LEN && strncmp(recv_buffer, AESD_SEEKTO_KEYWORD, AESD_SEEKTO_KEYWORD_LEN) == 0){
+#else
+        if(false){
+#endif
+            syslog(LOG_INFO, "Received seekto keyword");
+            char *save_ptr;
+            char delimiter[] = ":,";
 
-        fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
+            char *token = strtok_r(recv_buffer, delimiter, &save_ptr);
+            syslog(LOG_DEBUG, "First token: %s", token);
+
+            token = strtok_r(NULL, delimiter, &save_ptr);
+            syslog(LOG_DEBUG, "Second token: %s", token);
+
+            int cmd_offset = atoi(token);
+
+            token = strtok_r(NULL, delimiter, &save_ptr);
+            syslog(LOG_DEBUG, "Third token: %s", token);
+
+            int cmd_char_offset = atoi(token);
+
+            struct aesd_seekto seekto = {
+                .write_cmd = cmd_offset,
+                .write_cmd_offset = cmd_char_offset
+            };
+
+            int fd = fileno(data_file);
+
+            res = ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+            if(res < 0){
+                syslog(LOG_ERR, "ioctl error: %s", strerror(errno));
+            }
+        }
+        else{
+            fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
+        }
 
         if(memchr(recv_buffer, '\n', res) != NULL){
             syslog(LOG_DEBUG, "Newline detected. Packet fully received");

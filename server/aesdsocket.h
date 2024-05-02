@@ -20,7 +20,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/ioctl.h>
 #include <time.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 typedef struct client_thread_data{
     int client_fd;
@@ -48,6 +50,9 @@ typedef struct thread_instance{
 #else
 #define DATA_FILE_NAME          "/var/tmp/aesdsocketdata"
 #endif
+
+#define AESD_SEEKTO_KEYWORD     "AESDCHAR_IOCSEEKTO"
+#define AESD_SEEKTO_KEYWORD_LEN (sizeof(AESD_SEEKTO_KEYWORD) - 1)
 
 #define RECV_BUFFER_LEN         512
 
