@@ -248,7 +248,8 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
         PERROR("invalid ioctl magic");
         return -ENOTTY;
     }
-    else if(_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
+    
+    if(_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
     {
         PERROR("invalid ioctl command");
         return -ENOTTY;
