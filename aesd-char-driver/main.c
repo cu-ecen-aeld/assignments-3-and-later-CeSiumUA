@@ -244,6 +244,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
     }
 
     PDEBUG("ioctl request %u",cmd);
+    PDEBUG("ioctl arg %lu",arg);
     
     if(_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
     {
