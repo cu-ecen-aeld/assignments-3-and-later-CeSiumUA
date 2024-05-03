@@ -108,6 +108,7 @@ void* connection_handler(void *current_thread_data){
 
     while((res = fread(recv_buffer, sizeof(*recv_buffer), sizeof(recv_buffer), data_file)) > 0){
         syslog(LOG_DEBUG, "Sending %d bytes", res);
+        syslog(LOG_DEBUG, "Data: %.*s", res, recv_buffer);
         res = send(thread_data->client_fd, recv_buffer, res, 0);
         if(res == -1){
             syslog(LOG_ERR, "send error: %s", strerror(errno));

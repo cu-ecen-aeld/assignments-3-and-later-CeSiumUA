@@ -280,6 +280,8 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
     if(circular_buffer->full){
         available_entries = AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     }
+    
+    PDEBUG("available entries: %d", available_entries);
 
     if(aesd_seek.write_cmd >= available_entries)
     {
@@ -287,6 +289,9 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
         retval = -EINVAL;
         goto aesd_ioctl_exit;
     }
+
+    PDEBUG("write command: %d", aesd_seek.write_cmd);
+    PDEBUG("write command offset: %d", aesd_seek.write_cmd_offset);
 
     command_idx = (circular_buffer->out_offs + aesd_seek.write_cmd) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     i = circular_buffer->out_offs;
@@ -306,7 +311,11 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
 
     entry_offset += aesd_seek.write_cmd_offset;
 
+    PDEBUG("entry offset: %zu", entry_offset);
+
     filp->f_pos = entry_offset;
+
+    PDEBUG("new file position: %lld", filp->f_pos);
 
 aesd_ioctl_exit:
     mutex_unlock(&dev->mutex_lock);
