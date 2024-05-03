@@ -70,7 +70,11 @@ void* connection_handler(void *current_thread_data){
 
             int fd = fileno(data_file);
 
-            res = ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+            unsigned long request = AESDCHAR_IOCSEEKTO;
+
+            syslog(LOG_DEBUG, "Sending ioctl request: %lu", request);
+
+            res = ioctl(fd, request, &seekto);
             if(res < 0){
                 syslog(LOG_ERR, "ioctl error: %s", strerror(errno));
             }

@@ -242,6 +242,8 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
         PERROR("circular buffer not found");
         return -ENODEV;
     }
+
+    PDEBUG("ioctl request %u",cmd);
     
     if(_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
     {
