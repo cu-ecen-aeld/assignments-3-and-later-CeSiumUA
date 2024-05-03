@@ -78,6 +78,8 @@ void* connection_handler(void *current_thread_data){
             if(res < 0){
                 syslog(LOG_ERR, "ioctl error: %s", strerror(errno));
             }
+
+            break;
         }
         else{
             fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
