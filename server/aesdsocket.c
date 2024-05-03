@@ -46,6 +46,7 @@ void* connection_handler(void *current_thread_data){
 #else
         if(false){
 #endif
+            int ioctl_res;
             syslog(LOG_INFO, "Received seekto keyword");
             char *save_ptr;
             char delimiter[] = ":,";
@@ -74,12 +75,10 @@ void* connection_handler(void *current_thread_data){
 
             syslog(LOG_DEBUG, "Sending ioctl request: %lu", request);
 
-            res = ioctl(fd, request, &seekto);
-            if(res < 0){
+            ioctl_res = ioctl(fd, request, &seekto);
+            if(ioctl_res < 0){
                 syslog(LOG_ERR, "ioctl error: %s", strerror(errno));
             }
-
-            break;
         }
         else{
             fwrite(recv_buffer, sizeof(*recv_buffer), res, data_file);
