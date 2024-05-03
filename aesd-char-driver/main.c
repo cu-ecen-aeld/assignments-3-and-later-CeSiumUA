@@ -248,7 +248,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
     
     if(_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
     {
-        PERROR("invalid ioctl magic");
+        PERROR("invalid ioctl magic, expected: %x, got: %x", AESD_IOC_MAGIC, _IOC_TYPE(cmd));
         return -ENOTTY;
     }
     
